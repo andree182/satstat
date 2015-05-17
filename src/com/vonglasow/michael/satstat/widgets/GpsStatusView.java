@@ -19,21 +19,17 @@
 
 package com.vonglasow.michael.satstat.widgets;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-
-import com.vonglasow.michael.satstat.R;
-
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
-import android.graphics.RectF;
 import android.location.GpsSatellite;
 import android.util.AttributeSet;
 import android.util.Log;
+
+import com.vonglasow.michael.satstat.R;
 
 public class GpsStatusView extends SquareView {
 	private float mYaw = 0;
@@ -44,6 +40,8 @@ public class GpsStatusView extends SquareView {
 	
 	private Paint activePaint;
 	private Paint inactivePaint;
+	private Paint hasAlmanacPaint;
+	private Paint hasEphemerisPaint;
 	private Paint northPaint;
 	private Paint gridPaint;
 	private Paint gridBorderPaint;
@@ -86,7 +84,15 @@ public class GpsStatusView extends SquareView {
 		inactivePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 		inactivePaint.setColor(Color.parseColor("#FFFF4444"));
 		inactivePaint.setStyle(Paint.Style.FILL);
-		
+
+		hasAlmanacPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+		hasAlmanacPaint.setColor(Color.parseColor("#FF00AA00"));
+		hasAlmanacPaint.setStyle(Paint.Style.FILL);
+
+		hasEphemerisPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+		hasEphemerisPaint.setColor(Color.WHITE);
+		hasEphemerisPaint.setStyle(Paint.Style.FILL);
+
 		gridPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 		gridPaint.setColor(Color.parseColor("#FFFF8800"));
 		gridPaint.setStyle(Paint.Style.STROKE);
@@ -109,13 +115,21 @@ public class GpsStatusView extends SquareView {
 	/*
 	 * Draws a satellite in the sky grid.
 	 */
-	private void drawSat(Canvas canvas, int prn, float azimuth, float elevation, float snr, boolean used) {
+	private void drawSat(Canvas canvas, int prn, float azimuth, float elevation,
+			float snr, boolean hasAlmanac, boolean hasEphemeris, boolean used) {
 
 		float r = (90 - elevation) * mW * 0.9f / 200;
 		float x = (float) (r * Math.sin(azimuth * Math.PI / 180));
 		float y = (float) -(r * Math.cos(azimuth * Math.PI / 180));
-		
-		canvas.drawCircle(x, y, snr * snrScale, used?activePaint:inactivePaint);
+
+		float baseRadius = snr * snrScale;
+		if (hasAlmanac) {
+			canvas.drawCircle(x, y, baseRadius + 5, hasAlmanacPaint);
+		}
+		if (hasEphemeris) {
+			canvas.drawCircle(x, y, baseRadius + 3, hasEphemerisPaint);
+		}
+		canvas.drawCircle(x, y, baseRadius, used?activePaint:inactivePaint);
 	}
 	
 	@Override
@@ -158,7 +172,8 @@ public class GpsStatusView extends SquareView {
 				if ((azDelta < 5) && (eleDelta < 5)) {
 					Log.d("GpsStatusView", String.format("Satellite %d, snr=%f, azimuth=%f, elevation=%f, almanac=%b, ephemeris=%b, used=%b", sat.getPrn(), sat.getSnr(), sat.getAzimuth(), sat.getElevation(), sat.hasAlmanac(), sat.hasEphemeris(), sat.usedInFix()));
 				}
-				drawSat(canvas, sat.getPrn(), sat.getAzimuth(), sat.getElevation(), sat.getSnr(), sat.usedInFix());
+				drawSat(canvas, sat.getPrn(), sat.getAzimuth(), sat.getElevation(),
+						sat.getSnr(), sat.hasAlmanac(), sat.hasEphemeris(), sat.usedInFix());
 			}
 		}
 	}
