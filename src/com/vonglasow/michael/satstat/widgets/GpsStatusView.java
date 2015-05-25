@@ -124,10 +124,10 @@ public class GpsStatusView extends SquareView {
 
 		float baseRadius = snr * snrScale;
 		if (hasAlmanac) {
-			canvas.drawCircle(x, y, baseRadius + 5, hasAlmanacPaint);
+			canvas.drawCircle(x, y, baseRadius * 2, hasAlmanacPaint);
 		}
 		if (hasEphemeris) {
-			canvas.drawCircle(x, y, baseRadius + 3, hasEphemerisPaint);
+			canvas.drawCircle(x, y, baseRadius * 1.5f, hasEphemerisPaint);
 		}
 		canvas.drawCircle(x, y, baseRadius, used?activePaint:inactivePaint);
 	}
