@@ -1,3 +1,8 @@
 bin
 gen
 res/raw/build.txt
+.gradle
+/local.properties
+/.idea/
+*.iml
+.DS_Store
