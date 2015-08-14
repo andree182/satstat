@@ -31,10 +31,11 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
-import android.graphics.RectF;
 import android.location.GpsSatellite;
 import android.util.AttributeSet;
 import android.util.Log;
+
+import com.vonglasow.michael.satstat.R;
 
 public class GpsStatusView extends SquareView {
 	private float mYaw = 0, mPitch = 0, mRoll = 0;
@@ -44,6 +45,9 @@ public class GpsStatusView extends SquareView {
 	private Iterable<GpsSatelliteRender> mSats;
 	
 	private Paint satPaint;
+	private Paint hasAlmanacPaint;
+	private Paint hasEphemerisPaint;
+
 	private Paint northPaint;
 	private Paint gridPaint;
 	private Paint gridBorderPaint;
@@ -82,6 +86,14 @@ public class GpsStatusView extends SquareView {
 		satPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 		satPaint.setStyle(Paint.Style.FILL);
 
+		hasAlmanacPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+		hasAlmanacPaint.setColor(Color.parseColor("#FF00AA00"));
+		hasAlmanacPaint.setStyle(Paint.Style.FILL);
+
+		hasEphemerisPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+		hasEphemerisPaint.setColor(Color.WHITE);
+		hasEphemerisPaint.setStyle(Paint.Style.FILL);
+
 		gridPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 		gridPaint.setColor(Color.parseColor("#FFFF8800"));
 		gridPaint.setStyle(Paint.Style.STROKE);
@@ -108,11 +120,14 @@ public class GpsStatusView extends SquareView {
 	/*
 	 * Draws a satellite in the sky grid.
 	 */
+
 	private void drawSat(Canvas canvas, GpsSatelliteRender sat) {
 		float azimuth = sat.sat.getAzimuth();
 		float elevation =sat.sat.getElevation();
 		float snr = sat.sat.getSnr();
 		boolean used = sat.sat.usedInFix();
+		boolean hasAlmanac = sat.sat.hasAlmanac();
+		boolean hasEphemeris = sat.sat.hasEphemeris();
 
 		float azDelta = Math.abs((sat.sat.getAzimuth() + 180) % 360 - 180);
 		float eleDelta = Math.abs((sat.sat.getAzimuth() + 90) % 180 - 90);
@@ -128,9 +143,17 @@ public class GpsStatusView extends SquareView {
 		float x = (float) (r * Math.sin(azimuth * Math.PI / 180));
 		float y = (float) -(r * Math.cos(azimuth * Math.PI / 180));
 
+		float baseRadius = snr * snrScale;
+		if (hasAlmanac) {
+			canvas.drawCircle(x, y, baseRadius * 2, hasAlmanacPaint);
+		}
+		if (hasEphemeris) {
+			canvas.drawCircle(x, y, baseRadius * 1.5f, hasEphemerisPaint);
+		}
+
 		satPaint.setColor(sat.type.color);
 		satPaint.setAlpha(used ? 255 : 64);
-		canvas.drawCircle(x, y, snr * snrScale, satPaint);
+		canvas.drawCircle(x, y, baseRadius, satPaint);
 	}
 	
 	@Override
