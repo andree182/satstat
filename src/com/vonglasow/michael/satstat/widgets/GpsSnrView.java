@@ -32,49 +32,61 @@ import android.view.View;
  * Displays the signal-to-noise ratio of the GPS satellites in a bar chart.
  */
 public class GpsSnrView extends View {
-	private String TAG = "GpsSnrView";
-	
-	/**
-	 * The highest currently supported NMEA ID.
-	 */
-	private final int MAX_NMEA_ID = 235;
+	final private String TAG = "GpsSnrView";
 
 	private Iterable<GpsSatellite> mSats;
 
-	private Paint activePaint;
-	private Paint inactivePaint;
+	private Paint satBarPaint;
 	private Paint gridPaint;
 	private Paint gridPaintStrong;
-	private Paint gridPaintNone;
 
 	//FIXME: should be DPI-dependent, this is OK for MDPI
 	private int gridStrokeWidth = 2;
 
-	/*
-	 * Which satellites to draw:
-	 * 1–32: GPS
-	 * 33–54: Various SBAS systems (EGNOS, WAAS, SDCM, GAGAN, MSAS) – some IDs still unused
-	 * 55–64: not used (might be assigned to further SBAS systems)
-	 * 65–88: GLONASS
-	 * 89–96: GLONASS (future extensions?)
-	 * 97–192: not used
-	 * 193–195: QZSS
-	 * 196–200: QZSS (future extensions?)
-	 * 201–235: Beidou
-	 */
-	private boolean draw_1_32 = false;
-	private boolean draw_33_54 = false;
-	private boolean draw_55_64 = false;
-	private boolean draw_65_88 = false;
-	private boolean draw_89_96 = false;
-	private boolean draw_97_192 = false;
-	private boolean draw_193_195 = false;
-	private boolean draw_196_200 = false;
-	private boolean draw_201_235 = false;
+	private class SatelliteType {
+        public boolean enabled;
+		public String name;
+		public int min, max;
+		public int color;
 
+		public SatelliteType(boolean _enabled, String _name, int _min, int _max, int _color) {
+            enabled = _enabled;
+			name = _name;
+			min = _min;
+			max = _max;
+			color = _color;
+		}
+	}
+
+	private class SatelliteRenderInfo {
+		public int pos;
+		public int color;
+
+		SatelliteRenderInfo(int _pos, int _color) {
+			pos = _pos;
+			color = _color;
+		}
+
+		SatelliteRenderInfo() {
+			pos = -1;
+			color = -1;
+		}
+	}
+
+	private SatelliteType satelliteTypes[] = {
+        new SatelliteType(true, "GPS", 1, 32, Color.parseColor("#4ec95f")), // GPS
+        new SatelliteType(true, "SBAS", 33, 54, Color.parseColor("#ff7cf1")), // Various SBAS systems (EGNOS, WAAS, SDCM, GAGAN, MSAS) – some IDs still unused
+        new SatelliteType(false, "SBAS", 55, 64, Color.parseColor("#ff7cf1")), // not used (might be assigned to further SBAS systems)
+        new SatelliteType(true, "GLONASS", 65, 88, Color.parseColor("#4ebaff")), // GLONASS
+        new SatelliteType(true, "GLONASS", 89, 96, Color.parseColor("#4ebaff")), // GLONASS (future extensions?)
+        new SatelliteType(false, "", 97, 192, Color.parseColor("#cccccc")), // not used; TODO: do we really want to enable this huge 96-sat block?
+        new SatelliteType(true, "QZSS", 193, 195, Color.parseColor("#f1ff54")), // QZSS
+        new SatelliteType(true, "QZSS", 196, 200, Color.parseColor("#f1ff54")), // QZSS (future extensions?)
+        new SatelliteType(true, "Beidou", 201, 235, Color.parseColor("#ff4444")), // Beidou
+	};
 
 	/**
-	 * @param context
+	 * @param context ...
 	 */
 	public GpsSnrView(Context context) {
 		super(context);
@@ -82,8 +94,8 @@ public class GpsSnrView extends View {
 	}
 
 	/**
-	 * @param context
-	 * @param attrs
+	 * @param context ...
+	 * @param attrs ...
 	 */
 	public GpsSnrView(Context context, AttributeSet attrs) {
 		super(context, attrs);
@@ -91,9 +103,9 @@ public class GpsSnrView extends View {
 	}
 
 	/**
-	 * @param context
-	 * @param attrs
-	 * @param defStyle
+	 * @param context ...
+	 * @param attrs ...
+	 * @param defStyle ...
 	 */
 	public GpsSnrView(Context context, AttributeSet attrs, int defStyle) {
 		super(context, attrs, defStyle);
@@ -101,13 +113,8 @@ public class GpsSnrView extends View {
 	}
 
 	private void doInit() {
-		activePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-		activePaint.setColor(Color.parseColor("#FF33B5E5"));
-		activePaint.setStyle(Paint.Style.FILL);
-
-		inactivePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-		inactivePaint.setColor(Color.parseColor("#FFFF4444"));
-		inactivePaint.setStyle(Paint.Style.FILL);
+		satBarPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+		satBarPaint.setStyle(Paint.Style.FILL);
 
 		gridPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 		gridPaint.setColor(Color.parseColor("#FF4D4D4D"));
@@ -116,9 +123,6 @@ public class GpsSnrView extends View {
 
 		gridPaintStrong = new Paint(gridPaint);
 		gridPaintStrong.setColor(Color.parseColor("#FFFFFFFF"));
-
-		gridPaintNone = new Paint(gridPaint);
-		gridPaintNone.setColor(Color.parseColor("#00000000"));
 	}
 
 	/**
@@ -128,48 +132,35 @@ public class GpsSnrView extends View {
 		//don't use Canvas.getWidth() and Canvas.getHeight() here, they may return incorrect values
 		int w = getWidth();
 		int h = getHeight();
+		int curBar;
+		int i;
+		final int barGroup = 4;
+		int lastGroupEnd = 0;
+
+		// range boundaries and auxiliary lines (after every 4th satellite)
+
+		curBar = 0;
+		for (SatelliteType t: satelliteTypes) {
+			if (t.enabled) {
+				// start at next boundary
+				i = barGroup - (curBar % barGroup);
+				curBar += i;
+				for (; i < t.max - t.min + 1; i += barGroup, curBar += barGroup) {
+					float x = (float) gridStrokeWidth / 2
+							+ curBar * (w - gridStrokeWidth) / getNumBars();
+					canvas.drawLine(x, 0, x, h, gridPaint);
+				}
+
+				lastGroupEnd += t.max - t.min + 1;
+				float x = (float) gridStrokeWidth / 2
+						+ lastGroupEnd * (w - gridStrokeWidth) / getNumBars();
+				canvas.drawLine(x, 0, x, h, gridPaintStrong);
+			}
+		}
 
 		// left boundary
 		canvas.drawLine((float) gridStrokeWidth / 2, 0, (float) gridStrokeWidth / 2, h, gridPaintStrong);
-		
-		// range boundaries and auxiliary lines (after every 4th satellite)
-		for (int nmeaID = 1; nmeaID < MAX_NMEA_ID; nmeaID++) {
-			int pos = getGridPos(nmeaID);
-			if (pos > 0) {
-				float x = (float) gridStrokeWidth / 2
-						+ pos * (w - gridStrokeWidth) / getNumBars();
-				Paint paint = gridPaintNone;
-				switch(nmeaID) {
-				case 32:
-				case 64:
-				case 96:
-				case 192:
-				case 200:
-				case 235:
-					paint = gridPaintStrong;
-					break;
-				case 54:
-					if (!draw_55_64)
-						paint = gridPaintStrong;
-					break;
-				case 88:
-					if (!draw_89_96)
-						paint = gridPaintStrong;
-					else
-						paint = gridPaint;
-					break;
-				case 195:
-					if (!draw_196_200)
-						paint = gridPaintStrong;
-				default:
-					if ((nmeaID % 4) == 0)
-						paint = gridPaint;
-					break;
-				}
-				canvas.drawLine(x, 0, x, h, paint);
-			}
-		}
-		
+
 		// right boundary
 		canvas.drawLine(w - (float) gridStrokeWidth / 2, h, w - (float) gridStrokeWidth / 2, 0, gridPaintStrong);
 		
@@ -182,14 +173,15 @@ public class GpsSnrView extends View {
 	 * 
 	 * @param canvas The {@code Canvas} on which the SNR view will appear.
 	 * @param nmeaID The NMEA ID of the satellite, as returned by {@link android.location.GpsSatellite#getPrn()}.
-	 * @param snr The signal-to-noise ratio (SNR) for the satellite.
+	 * @param snr The signal-to-noise ratio (SNR) fosssr the satellite.
 	 * @param used Whether the satellite is used in the fix.
 	 */
 	private void drawSat(Canvas canvas, int nmeaID, float snr, boolean used) {
 		int w = getWidth();
 		int h = getHeight();
+		SatelliteRenderInfo ri = getGridPos(nmeaID);
 
-		int i = getGridPos(nmeaID);
+		int i = ri.pos;
 
 		int x0 = (i - 1) * (w - gridStrokeWidth) / getNumBars() + gridStrokeWidth / 2;
 		int x1 = i * (w - gridStrokeWidth) / getNumBars() - gridStrokeWidth / 2;
@@ -197,7 +189,9 @@ public class GpsSnrView extends View {
 		int y0 = h - gridStrokeWidth;
 		int y1 = (int) (y0 * (1 - Math.min(snr, 60) / 60));
 
-		canvas.drawRect(x0, y1, x1, h, used?activePaint:inactivePaint);
+		satBarPaint.setColor(ri.color);
+		satBarPaint.setAlpha(used ? 255 : 64);
+		canvas.drawRect(x0, y1, x1, h, satBarPaint);
 	}
 
 	/**
@@ -210,62 +204,24 @@ public class GpsSnrView extends View {
 	 * @param nmeaID The NMEA ID of the satellite, as returned by {@link android.location.GpsSatellite#getPrn()}.
 	 * @return The position of the SNR bar in the grid. The position of the first visible bar is 1. If {@code nmeaID} falls within a hidden range, -1 is returned. 
 	 */
-	private int getGridPos(int nmeaID) {
-		if (nmeaID < 1) return -1;
-		
+	private SatelliteRenderInfo getGridPos(int nmeaID) {
 		int skip = 0;
-		if (nmeaID > 32) {
-			if (!draw_1_32) skip+=32;
-			if (nmeaID > 54) {
-				if (!draw_33_54) skip+=22;
-				if (nmeaID > 64) {
-					if (!draw_55_64) skip+=10;
-					if (nmeaID > 88) {
-						if (!draw_65_88) skip+=24;
-						if (nmeaID > 96) {
-							if (!draw_89_96) skip+=8;
-							if (nmeaID > 192) {
-								if (!draw_97_192) skip+=96;
-								if (nmeaID > 195) {
-									if (!draw_193_195) skip+=3;
-									if (nmeaID > 200) {
-										if (nmeaID > MAX_NMEA_ID) return -1;
-										else if (!draw_201_235) return -1;
-										else if (!draw_196_200) skip+=5;
-									} else {
-										// 195 < nmeaID <= 200
-										if (!draw_196_200) return -1;
-									}
-								} else {
-									// 192 < nmeaID <= 195
-									if (!draw_193_195) return -1;
-								}
-							} else {
-								// 96 < nmeaID <= 192
-								if (!draw_97_192) return -1;
-							}
-						} else {
-							// 88 < nmeaID <= 96
-							if (!draw_89_96) return -1;
-						}
-					} else {
-						// 64 < nmeaID <= 88
-						if (!draw_65_88) return -1;
-					}
-				} else {
-					// 54 < nmeaID <= 64
-					if (!draw_55_64) return -1;
-				}
-			} else {
-				// 32 < nmeaID <= 54
-				if (!draw_33_54) return -1;
+
+		if (nmeaID < 1)
+			return new SatelliteRenderInfo();
+
+		for (SatelliteType t: satelliteTypes) {
+			if (nmeaID >= t.min && nmeaID <= t.max) {
+				if (!t.enabled)
+					return new SatelliteRenderInfo();
+				else
+					return new SatelliteRenderInfo(nmeaID - skip, t.color);
 			}
-		} else {
-			// nmeaID <= 32
-			if (!draw_1_32) return -1;
+			if (!t.enabled)
+				skip += t.max - t.min + 1;
 		}
-		
-		return nmeaID - skip;
+
+		return new SatelliteRenderInfo();
 	}
 	
 	/**
@@ -278,15 +234,13 @@ public class GpsSnrView extends View {
 	 * @return The number of bars to draw
 	 */
 	private int getNumBars() {
-		return (draw_1_32 ? 32 : 0) 
-				+ (draw_33_54 ? 22 : 0)
-				+ (draw_55_64 ? 10 : 0)
-				+ (draw_65_88 ? 24 : 0)
-				+ (draw_89_96 ? 8 : 0)
-				+ (draw_97_192 ? 96 : 0)
-				+ (draw_193_195 ? 3 : 0)
-				+ (draw_196_200 ? 5 : 0)
-				+ (draw_201_235 ? 35 : 0);
+		int no = 0;
+
+		for (SatelliteType t: satelliteTypes) {
+			if (t.enabled)
+				no += t.max - t.min + 1;
+		}
+		return no;
 	}
 
 	/**
@@ -296,48 +250,38 @@ public class GpsSnrView extends View {
 	 * NMEA IDs will be drawn. 
 	 */
 	protected void initializeGrid() {
+		boolean someOn = false;
 		// iterate through list to find out how many bars to draw
-		if (mSats != null)
+		if (mSats != null) {
+			for (SatelliteType t: satelliteTypes)
+				t.enabled = false;
+
 			for (GpsSatellite sat : mSats) {
 				int prn = sat.getPrn();
-				if (prn < 1) {
-					Log.wtf(TAG, String.format("Got satellite with invalid NMEA ID %d", prn));
-				} else if (prn <= 32) {
-					draw_1_32 = true;
-				} else if (prn <= 54) {
-					draw_33_54 = true;
-				} else if (prn <= 64) {
-					// most likely an extended SBAS range, display the lower range, too
-					draw_33_54 = true;
-					draw_55_64 = true;
-				} else if (prn <= 88) {
-					draw_65_88 = true;
-				} else if (prn <= 96) {
-					// most likely an extended GLONASS range, display the lower range, too
-					draw_65_88 = true;
-					draw_89_96 = true;
-				} else if (prn <= 192) {
-					draw_97_192 = true; // TODO: do we really want to enable this huge 96-sat block?
-					Log.w(TAG, String.format("Got satellite with NMEA ID %d (from the huge unassigned 97-192 range)", prn));
-				} else if (prn <= 195) {
-					draw_193_195 = true;
-				} else if (prn <= 200) {
-					// most likely an extended QZSS range, display the lower range, too
-					draw_193_195 = true;
-					draw_196_200 = true;
-				} else if (prn <= 235) {
-					draw_201_235 = true;
-				} else {
-					Log.w(TAG, String.format("Got satellite with NMEA ID %d, possibly unsupported system", prn));
+				boolean found = false;
+
+				for (SatelliteType t : satelliteTypes) {
+					if (prn >= t.min && prn <= t.max) {
+						t.enabled = true;
+						found = true;
+					}
 				}
+				if (!found)
+					Log.wtf(TAG, String.format("Got satellite with unknown NMEA ID %d", prn));
 			}
+		}
+
 		/*
 		 * If we didn't get any valid ranges, display at least the GPS range.
 		 * No need to check for extended ranges here - if they get drawn, so
 		 * will their corresponding base range.
 		 */
-		if (!(draw_1_32 || draw_33_54 || draw_65_88 || draw_97_192 || draw_193_195 || draw_201_235))
-			draw_1_32 = true;
+		for (SatelliteType t: satelliteTypes) {
+			someOn |= t.enabled;
+		}
+
+		if (!someOn)
+			satelliteTypes[0].enabled = true;
 	}
 	
 	/**
