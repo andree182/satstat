@@ -39,6 +39,7 @@ public class GpsSnrView extends View {
 	private Paint satBarPaint;
 	private Paint gridPaint;
 	private Paint gridPaintStrong;
+	private Paint netLabelPaint;
 
 	//FIXME: should be DPI-dependent, this is OK for MDPI
 	private int gridStrokeWidth = 2;
@@ -123,6 +124,11 @@ public class GpsSnrView extends View {
 
 		gridPaintStrong = new Paint(gridPaint);
 		gridPaintStrong.setColor(Color.parseColor("#FFFFFFFF"));
+
+		netLabelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+		netLabelPaint.setColor(Color.parseColor("#B0FFFFFF"));
+		netLabelPaint.setStyle(Paint.Style.FILL);
+		netLabelPaint.setTextAlign(Paint.Align.LEFT);
 	}
 
 	/**
@@ -136,23 +142,28 @@ public class GpsSnrView extends View {
 		int i;
 		final int barGroup = 4;
 		int lastGroupEnd = 0;
+		float x;
 
 		// range boundaries and auxiliary lines (after every 4th satellite)
 
 		curBar = 0;
 		for (SatelliteType t: satelliteTypes) {
 			if (t.enabled) {
+				x = (float) gridStrokeWidth / 2
+						+ curBar * (w - gridStrokeWidth) / getNumBars();
+				canvas.drawText(t.name, x + gridStrokeWidth * 2, netLabelPaint.getTextSize(), netLabelPaint);
+
 				// start at next boundary
 				i = barGroup - (curBar % barGroup);
 				curBar += i;
 				for (; i < t.max - t.min + 1; i += barGroup, curBar += barGroup) {
-					float x = (float) gridStrokeWidth / 2
+					x = (float) gridStrokeWidth / 2
 							+ curBar * (w - gridStrokeWidth) / getNumBars();
 					canvas.drawLine(x, 0, x, h, gridPaint);
 				}
 
 				lastGroupEnd += t.max - t.min + 1;
-				float x = (float) gridStrokeWidth / 2
+				x = (float) gridStrokeWidth / 2
 						+ lastGroupEnd * (w - gridStrokeWidth) / getNumBars();
 				canvas.drawLine(x, 0, x, h, gridPaintStrong);
 			}
