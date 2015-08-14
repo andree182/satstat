@@ -27,6 +27,10 @@ import android.location.GpsSatellite;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
+import com.vonglasow.michael.satstat.widgets.GpsSatelliteRender;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Displays the signal-to-noise ratio of the GPS satellites in a bar chart.
@@ -34,7 +38,7 @@ import android.view.View;
 public class GpsSnrView extends View {
 	final private String TAG = "GpsSnrView";
 
-	private Iterable<GpsSatellite> mSats;
+	private Iterable<GpsSatelliteRender> mSats;
 
 	private Paint satBarPaint;
 	private Paint gridPaint;
@@ -43,48 +47,6 @@ public class GpsSnrView extends View {
 
 	//FIXME: should be DPI-dependent, this is OK for MDPI
 	private int gridStrokeWidth = 2;
-
-	private class SatelliteType {
-        public boolean enabled;
-		public String name;
-		public int min, max;
-		public int color;
-
-		public SatelliteType(boolean _enabled, String _name, int _min, int _max, int _color) {
-            enabled = _enabled;
-			name = _name;
-			min = _min;
-			max = _max;
-			color = _color;
-		}
-	}
-
-	private class SatelliteRenderInfo {
-		public int pos;
-		public int color;
-
-		SatelliteRenderInfo(int _pos, int _color) {
-			pos = _pos;
-			color = _color;
-		}
-
-		SatelliteRenderInfo() {
-			pos = -1;
-			color = -1;
-		}
-	}
-
-	private SatelliteType satelliteTypes[] = {
-        new SatelliteType(true, "GPS", 1, 32, Color.parseColor("#4ec95f")), // GPS
-        new SatelliteType(true, "SBAS", 33, 54, Color.parseColor("#ff7cf1")), // Various SBAS systems (EGNOS, WAAS, SDCM, GAGAN, MSAS) – some IDs still unused
-        new SatelliteType(false, "SBAS", 55, 64, Color.parseColor("#ff7cf1")), // not used (might be assigned to further SBAS systems)
-        new SatelliteType(true, "GLONASS", 65, 88, Color.parseColor("#4ebaff")), // GLONASS
-        new SatelliteType(true, "GLONASS", 89, 96, Color.parseColor("#4ebaff")), // GLONASS (future extensions?)
-        new SatelliteType(false, "", 97, 192, Color.parseColor("#cccccc")), // not used; TODO: do we really want to enable this huge 96-sat block?
-        new SatelliteType(true, "QZSS", 193, 195, Color.parseColor("#f1ff54")), // QZSS
-        new SatelliteType(true, "QZSS", 196, 200, Color.parseColor("#f1ff54")), // QZSS (future extensions?)
-        new SatelliteType(true, "Beidou", 201, 235, Color.parseColor("#ff4444")), // Beidou
-	};
 
 	/**
 	 * @param context ...
@@ -132,7 +94,7 @@ public class GpsSnrView extends View {
 	}
 
 	/**
-	 * Draws the grid lines.
+	 * Draws the grid lines - range boundaries and auxiliary lines.
 	 */
 	private void drawGrid(Canvas canvas) {
 		//don't use Canvas.getWidth() and Canvas.getHeight() here, they may return incorrect values
@@ -144,10 +106,8 @@ public class GpsSnrView extends View {
 		int lastGroupEnd = 0;
 		float x;
 
-		// range boundaries and auxiliary lines (after every 4th satellite)
-
 		curBar = 0;
-		for (SatelliteType t: satelliteTypes) {
+		for (GpsSatelliteRender.SatelliteType t: GpsSatelliteRender.satelliteTypes) {
 			if (t.enabled) {
 				x = (float) gridStrokeWidth / 2
 						+ curBar * (w - gridStrokeWidth) / getNumBars();
@@ -183,16 +143,16 @@ public class GpsSnrView extends View {
 	 * Draws the SNR bar for a satellite.
 	 * 
 	 * @param canvas The {@code Canvas} on which the SNR view will appear.
-	 * @param nmeaID The NMEA ID of the satellite, as returned by {@link android.location.GpsSatellite#getPrn()}.
-	 * @param snr The signal-to-noise ratio (SNR) fosssr the satellite.
-	 * @param used Whether the satellite is used in the fix.
+	 * @param sat Satellite decription.
 	 */
-	private void drawSat(Canvas canvas, int nmeaID, float snr, boolean used) {
+	private void drawSat(Canvas canvas, GpsSatelliteRender sat) {
 		int w = getWidth();
 		int h = getHeight();
-		SatelliteRenderInfo ri = getGridPos(nmeaID);
+		int nmeaID = sat.sat.getPrn();
+		float snr = sat.sat.getSnr();
+		boolean used = sat.sat.usedInFix();
 
-		int i = ri.pos;
+		int i = getGridPos(nmeaID);
 
 		int x0 = (i - 1) * (w - gridStrokeWidth) / getNumBars() + gridStrokeWidth / 2;
 		int x1 = i * (w - gridStrokeWidth) / getNumBars() - gridStrokeWidth / 2;
@@ -200,7 +160,7 @@ public class GpsSnrView extends View {
 		int y0 = h - gridStrokeWidth;
 		int y1 = (int) (y0 * (1 - Math.min(snr, 60) / 60));
 
-		satBarPaint.setColor(ri.color);
+		satBarPaint.setColor(sat.type.color);
 		satBarPaint.setAlpha(used ? 255 : 64);
 		canvas.drawRect(x0, y1, x1, h, satBarPaint);
 	}
@@ -215,29 +175,29 @@ public class GpsSnrView extends View {
 	 * @param nmeaID The NMEA ID of the satellite, as returned by {@link android.location.GpsSatellite#getPrn()}.
 	 * @return The position of the SNR bar in the grid. The position of the first visible bar is 1. If {@code nmeaID} falls within a hidden range, -1 is returned. 
 	 */
-	private SatelliteRenderInfo getGridPos(int nmeaID) {
+	private int getGridPos(int nmeaID) {
 		int skip = 0;
 
 		if (nmeaID < 1)
-			return new SatelliteRenderInfo();
+			return -1;
 
-		for (SatelliteType t: satelliteTypes) {
+		for (GpsSatelliteRender.SatelliteType t: GpsSatelliteRender.satelliteTypes) {
 			if (nmeaID >= t.min && nmeaID <= t.max) {
 				if (!t.enabled)
-					return new SatelliteRenderInfo();
+					return -1;
 				else
-					return new SatelliteRenderInfo(nmeaID - skip, t.color);
+					return nmeaID - skip;
 			}
 			if (!t.enabled)
 				skip += t.max - t.min + 1;
 		}
 
-		return new SatelliteRenderInfo();
+		return -1;
 	}
-	
+
 	/**
 	 * Returns the number of SNR bars to draw
-	 * 
+	 *
 	 * The number of bars to draw varies depending on the systems supported by
 	 * the device. The most common numbers are 32 for a GPS-only receiver or 56
 	 * for a combined GPS/GLONASS receiver.
@@ -247,7 +207,7 @@ public class GpsSnrView extends View {
 	private int getNumBars() {
 		int no = 0;
 
-		for (SatelliteType t: satelliteTypes) {
+		for (GpsSatelliteRender.SatelliteType t: GpsSatelliteRender.satelliteTypes) {
 			if (t.enabled)
 				no += t.max - t.min + 1;
 		}
@@ -264,14 +224,14 @@ public class GpsSnrView extends View {
 		boolean someOn = false;
 		// iterate through list to find out how many bars to draw
 		if (mSats != null) {
-			for (SatelliteType t: satelliteTypes)
+			for (GpsSatelliteRender.SatelliteType t: GpsSatelliteRender.satelliteTypes)
 				t.enabled = false;
 
-			for (GpsSatellite sat : mSats) {
-				int prn = sat.getPrn();
+			for (GpsSatelliteRender sat : mSats) {
+				int prn = sat.sat.getPrn();
 				boolean found = false;
 
-				for (SatelliteType t : satelliteTypes) {
+				for (GpsSatelliteRender.SatelliteType t : GpsSatelliteRender.satelliteTypes) {
 					if (prn >= t.min && prn <= t.max) {
 						t.enabled = true;
 						found = true;
@@ -287,12 +247,12 @@ public class GpsSnrView extends View {
 		 * No need to check for extended ranges here - if they get drawn, so
 		 * will their corresponding base range.
 		 */
-		for (SatelliteType t: satelliteTypes) {
+		for (GpsSatelliteRender.SatelliteType t: GpsSatelliteRender.satelliteTypes) {
 			someOn |= t.enabled;
 		}
 
 		if (!someOn)
-			satelliteTypes[0].enabled = true;
+			GpsSatelliteRender.satelliteTypes[0].enabled = true;
 	}
 	
 	/**
@@ -309,8 +269,8 @@ public class GpsSnrView extends View {
 		
 		// draw the SNR bars
 		if (mSats != null)
-			for (GpsSatellite sat : mSats)
-				drawSat(canvas, sat.getPrn(), sat.getSnr(), sat.usedInFix());
+			for (GpsSatelliteRender sat : mSats)
+				drawSat(canvas, sat);
 		
 		// draw the grid on top
 		drawGrid(canvas);
@@ -331,7 +291,10 @@ public class GpsSnrView extends View {
 	 * @param sats A list of satellites currently in view.
 	 */
 	public void showSats(Iterable<GpsSatellite> sats) {
-		mSats = sats;
+		List<GpsSatelliteRender> l = new ArrayList<GpsSatelliteRender>();
+		for (GpsSatellite s: sats)
+			l.add(new GpsSatelliteRender(s));
+		mSats = l;
 		invalidate();
 	}
 }

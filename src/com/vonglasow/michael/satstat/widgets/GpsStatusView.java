@@ -21,6 +21,7 @@ package com.vonglasow.michael.satstat.widgets;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import com.vonglasow.michael.satstat.R;
 
@@ -40,10 +41,9 @@ public class GpsStatusView extends SquareView {
 	private float mRotation = 0;
 	private int mW = 0;
 	private int mH = 0;
-	private Iterable<GpsSatellite> mSats;
+	private Iterable<GpsSatelliteRender> mSats;
 	
-	private Paint activePaint;
-	private Paint inactivePaint;
+	private Paint satPaint;
 	private Paint northPaint;
 	private Paint gridPaint;
 	private Paint gridBorderPaint;
@@ -54,10 +54,9 @@ public class GpsStatusView extends SquareView {
 	private Path labelPathS = new Path();
 	private Path labelPathW = new Path();
 
-	
 	//FIXME: these two should be DPI-dependent, this is OK for MDPI
-	private int gridStrokeWidth = 2;
-	private float snrScale = 0.2f;
+	private final int gridStrokeWidth = 2;
+	private final float snrScale = 0.2f;
 	
 	// Compensation for display rotation. Use Surface.ROTATION_* as index (0, 90, 180, 270 deg).
 	@SuppressWarnings("boxing")
@@ -79,14 +78,9 @@ public class GpsStatusView extends SquareView {
 	}
 	
 	private void doInit() {
-		activePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-		activePaint.setColor(Color.parseColor("#FF33B5E5"));
-		activePaint.setStyle(Paint.Style.FILL);
-		
-		inactivePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-		inactivePaint.setColor(Color.parseColor("#FFFF4444"));
-		inactivePaint.setStyle(Paint.Style.FILL);
-		
+		satPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+		satPaint.setStyle(Paint.Style.FILL);
+
 		gridPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 		gridPaint.setColor(Color.parseColor("#FFFF8800"));
 		gridPaint.setStyle(Paint.Style.STROKE);
@@ -109,13 +103,29 @@ public class GpsStatusView extends SquareView {
 	/*
 	 * Draws a satellite in the sky grid.
 	 */
-	private void drawSat(Canvas canvas, int prn, float azimuth, float elevation, float snr, boolean used) {
+	private void drawSat(Canvas canvas, GpsSatelliteRender sat) {
+		float azimuth = sat.sat.getAzimuth();
+		float elevation =sat.sat.getElevation();
+		float snr = sat.sat.getSnr();
+		boolean used = sat.sat.usedInFix();
+
+		float azDelta = Math.abs((sat.sat.getAzimuth() + 180) % 360 - 180);
+		float eleDelta = Math.abs((sat.sat.getAzimuth() + 90) % 180 - 90);
+		if ((azDelta < 5) && (eleDelta < 5) && used) {
+			Log.d(
+				"GpsStatusView",
+				String.format("Satellite %d, snr=%f, azimuth=%f, elevation=%f, almanac=%b, ephemeris=%b, used=%b",
+				sat.sat.getPrn(), snr, azimuth, elevation, sat.sat.hasAlmanac(), sat.sat.hasEphemeris(), used)
+			);
+		}
 
 		float r = (90 - elevation) * mW * 0.9f / 200;
 		float x = (float) (r * Math.sin(azimuth * Math.PI / 180));
 		float y = (float) -(r * Math.cos(azimuth * Math.PI / 180));
-		
-		canvas.drawCircle(x, y, snr * snrScale, used?activePaint:inactivePaint);
+
+		satPaint.setColor(sat.type.color);
+		satPaint.setAlpha(used ? 255 : 64);
+		canvas.drawCircle(x, y, snr * snrScale, satPaint);
 	}
 	
 	@Override
@@ -152,13 +162,8 @@ public class GpsStatusView extends SquareView {
 				labelPathW, 0, -labelPaint.descent(), labelPaint);
 		
 		if (mSats != null) {
-			for (GpsSatellite sat : mSats) {
-				float azDelta = Math.abs((sat.getAzimuth() + 180) % 360 -180);
-				float eleDelta = Math.abs((sat.getAzimuth() + 90) % 180 - 90);
-				if ((azDelta < 5) && (eleDelta < 5)) {
-					Log.d("GpsStatusView", String.format("Satellite %d, snr=%f, azimuth=%f, elevation=%f, almanac=%b, ephemeris=%b, used=%b", sat.getPrn(), sat.getSnr(), sat.getAzimuth(), sat.getElevation(), sat.hasAlmanac(), sat.hasEphemeris(), sat.usedInFix()));
-				}
-				drawSat(canvas, sat.getPrn(), sat.getAzimuth(), sat.getElevation(), sat.getSnr(), sat.usedInFix());
+			for (GpsSatelliteRender sat : mSats) {
+				drawSat(canvas, sat);
 			}
 		}
 	}
@@ -211,7 +216,10 @@ public class GpsStatusView extends SquareView {
 	}
 	
 	public void showSats(Iterable<GpsSatellite> sats) {
-		mSats = sats;
+		List<GpsSatelliteRender> l = new ArrayList<GpsSatelliteRender>();
+		for (GpsSatellite s: sats)
+			l.add(new GpsSatelliteRender(s));
+		mSats = l;
 		invalidate();
 	}
 }
