@@ -32,7 +32,7 @@ import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 
 public class GpsStatusView extends SquareView {
-	private float mYaw = 0;
+	private float mYaw = 0, mPitch = 0, mRoll = 0;
 	private float mRotation = 0;
 	private int mW = 0;
 	private int mH = 0;
@@ -44,6 +44,7 @@ public class GpsStatusView extends SquareView {
 	private Paint gridPaint;
 	private Paint gridBorderPaint;
 	private Paint labelPaint;
+	private Paint centeringPaint;
 	private Path northArrow = new Path();
 	private Path labelPathN = new Path();
 	private Path labelPathE = new Path();
@@ -96,7 +97,11 @@ public class GpsStatusView extends SquareView {
 		gridBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 		gridBorderPaint.setColor(Color.parseColor("#50FF9800")); // Orange 500 @ 30%
 		gridBorderPaint.setStyle(Paint.Style.STROKE);
-		
+
+		centeringPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+		centeringPaint.setColor(Color.parseColor("#30FFFFFF"));
+		centeringPaint.setStyle(Paint.Style.FILL);
+
 		northPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 		northPaint.setColor(Color.parseColor("#FFF44336")); // Red 500
 		northPaint.setStyle(Paint.Style.FILL);
@@ -123,17 +128,21 @@ public class GpsStatusView extends SquareView {
 	protected void onDraw(Canvas canvas) {
 		int cx = mW / 2;
 		int cy = mH / 2;
+		float roll = mRoll, pitch = mPitch;
 
 		//Log.d("GpsStatusView", String.format("Drawing on a %dx%d canvas", w, h));
 
 		canvas.translate(cx, cy);
+
+		canvas.drawCircle(mRoll / 90 * mW, mPitch / 180 * mW, mW * 0.05f, centeringPaint);
+
 		canvas.rotate(-mRotation);
-		
+
 		canvas.drawCircle(0, 0, mW * 0.37125f, gridBorderPaint);
-		
+
 		canvas.drawLine(-mW * 0.405f, 0, mW * 0.405f, 0, gridPaint);
 		canvas.drawLine(0, -mH * 0.405f, 0, mH * 0.405f, gridPaint);
-		
+
 		canvas.drawCircle(0,  0,  mW * 0.405f, gridPaint);
 		canvas.drawCircle(0,  0,  mW * 0.27f, gridPaint);
 		canvas.drawCircle(0,  0,  mW * 0.135f, gridPaint);
@@ -151,7 +160,7 @@ public class GpsStatusView extends SquareView {
 
 		canvas.drawTextOnPath(((Activity) getContext()).getString(R.string.value_W),
 				labelPathW, 0, -labelPaint.descent(), labelPaint);
-		
+
 		if (mSats != null) {
 			for (GpsSatellite sat : mSats) {
 				drawSat(canvas, sat.getPrn(), sat.getAzimuth(), sat.getElevation(), sat.getSnr(), sat.usedInFix());
@@ -201,9 +210,12 @@ public class GpsStatusView extends SquareView {
 		labelPathW.rLineTo(2 * relX, 2 * relY);
 	}
 	
-	public void setYaw(float yaw) {
+	public void setOrientation(float yaw, float pitch, float roll) {
 		mYaw = yaw;
 		mRotation = mYaw + zeroYaw[((Activity) getContext()).getWindowManager().getDefaultDisplay().getRotation()];
+
+		mPitch = pitch;
+		mRoll = roll;
 		refreshGeometries();
 		invalidate();
 	}

@@ -268,7 +268,7 @@ public class GpsSectionFragment extends Fragment {
 	public void onSensorChanged(SensorEvent event) {
 		switch (event.sensor.getType()) {
 		case Sensor.TYPE_ORIENTATION:
-			gpsStatusView.setYaw(event.values[0]);
+			gpsStatusView.setOrientation(event.values[0], event.values[1], event.values[2]);
 			break;
 		}
 	}
