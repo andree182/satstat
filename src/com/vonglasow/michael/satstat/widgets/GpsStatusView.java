@@ -20,7 +20,6 @@
 package com.vonglasow.michael.satstat.widgets;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import com.vonglasow.michael.satstat.R;
@@ -31,11 +30,10 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.RectF;
 import android.location.GpsSatellite;
 import android.util.AttributeSet;
 import android.util.Log;
-
-import com.vonglasow.michael.satstat.R;
 
 public class GpsStatusView extends SquareView {
 	private float mYaw = 0, mPitch = 0, mRoll = 0;
@@ -43,10 +41,9 @@ public class GpsStatusView extends SquareView {
 	private int mW = 0;
 	private int mH = 0;
 	private Iterable<GpsSatelliteRender> mSats;
-	
+
 	private Paint satPaint;
-	private Paint hasAlmanacPaint;
-	private Paint hasEphemerisPaint;
+	private Paint satFlagsPaint;
 
 	private Paint northPaint;
 	private Paint gridPaint;
@@ -62,6 +59,7 @@ public class GpsStatusView extends SquareView {
 	//FIXME: these two should be DPI-dependent, this is OK for MDPI
 	private final int gridStrokeWidth = 2;
 	private final float snrScale = 0.4f;
+	private final float flagsScale = 1.3f;
 	
 	// Compensation for display rotation. Use Surface.ROTATION_* as index (0, 90, 180, 270 deg).
 	@SuppressWarnings("boxing")
@@ -86,13 +84,9 @@ public class GpsStatusView extends SquareView {
 		satPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 		satPaint.setStyle(Paint.Style.FILL);
 
-		hasAlmanacPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-		hasAlmanacPaint.setColor(Color.parseColor("#FF00AA00"));
-		hasAlmanacPaint.setStyle(Paint.Style.FILL);
-
-		hasEphemerisPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-		hasEphemerisPaint.setColor(Color.WHITE);
-		hasEphemerisPaint.setStyle(Paint.Style.FILL);
+		satFlagsPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+		satFlagsPaint.setColor(Color.WHITE);
+		satFlagsPaint.setStyle(Paint.Style.STROKE);
 
 		gridPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 		gridPaint.setColor(Color.parseColor("#FFFF8800"));
@@ -144,11 +138,12 @@ public class GpsStatusView extends SquareView {
 		float y = (float) -(r * Math.cos(azimuth * Math.PI / 180));
 
 		float baseRadius = snr * snrScale;
+		RectF rect = new RectF(x - baseRadius * flagsScale, y - baseRadius * flagsScale, x + baseRadius * flagsScale, y + baseRadius * flagsScale);
 		if (hasAlmanac) {
-			canvas.drawCircle(x, y, baseRadius * 2, hasAlmanacPaint);
+			canvas.drawArc(rect, 0, 90, false, satFlagsPaint);
 		}
 		if (hasEphemeris) {
-			canvas.drawCircle(x, y, baseRadius * 1.5f, hasEphemerisPaint);
+			canvas.drawArc(rect, 90, 270, false, satFlagsPaint);
 		}
 
 		satPaint.setColor(sat.type.color);
