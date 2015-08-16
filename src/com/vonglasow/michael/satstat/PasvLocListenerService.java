@@ -112,14 +112,15 @@ public class PasvLocListenerService extends Service implements GpsStatus.Listene
 	@Override
 	public void onGpsStatusChanged(int event) {
 		GpsStatus status = mLocationManager.getGpsStatus(null);
-		int satsUsed = 0;
+		boolean satsUsed = false;
 		Iterable<GpsSatellite> sats = status.getSatellites();
 		for (GpsSatellite sat : sats) {
 			if (sat.usedInFix()) {
-				satsUsed++;
+				satsUsed = true;
+				break;
 			}
 		}
-		if (satsUsed == 0) {
+		if (!satsUsed) {
 			if (mStatus != GPS_INACTIVE)
 				mStatus = GPS_SEARCH;
 			showStatusNoLocation();
@@ -185,6 +186,13 @@ public class PasvLocListenerService extends Service implements GpsStatus.Listene
 			}
 
 			String text = "";
+
+			if (location.hasSpeed()) {
+				title = title + (" | ") + String.format("%.0f%s",
+						(location.getSpeed() * 3.6),
+						getString(R.string.unit_km_h));
+			}
+
 			if (location.hasAltitude()) {
 				text = text + String.format("%.0f%s",
 						(location.getAltitude() * (prefUnitType ? 1 : 3.28084)),
@@ -200,7 +208,7 @@ public class PasvLocListenerService extends Service implements GpsStatus.Listene
 						(location.getAccuracy() * (prefUnitType ? 1 : 3.28084)),
 						getString(((prefUnitType) ? R.string.unit_meter : R.string.unit_feet)));
 			}
-			text = text + (text.equals("")?"":", ") + String.format("%d/%d",
+			text = text + (text.equals("")?"":", ") + String.format("SAT %d/%d",
 					satsUsed,
 					satsInView);
 			text = text + (text.equals("")?"":",\n") + String.format("TTFF %d s",
@@ -296,8 +304,25 @@ public class PasvLocListenerService extends Service implements GpsStatus.Listene
 
 	public void showStatusNoLocation() {
 		if (mNotifySearch && (mStatus != GPS_INACTIVE)) {
+			String text = "";
+			GpsStatus status = mLocationManager.getGpsStatus(null);
+			int satsInView = 0;
+			int satsUsed = 0;
+			Iterable<GpsSatellite> sats = status.getSatellites();
+			for (GpsSatellite sat : sats) {
+				satsInView++;
+				if (sat.usedInFix()) {
+					satsUsed++;
+				}
+			}
+
+			text = text + (text.equals("")?"":", ") + String.format("SAT %d/%d",
+					satsUsed,
+					satsInView);
+			text = text + (text.equals("")?"":", ") + String.format("TTFF %d s",
+					status.getTimeToFirstFix() / 1000);
 			mBuilder.setSmallIcon(R.drawable.ic_stat_notify_nolocation);
-			mBuilder.setContentTitle(getString(R.string.notify_nolocation_title));
+			mBuilder.setContentTitle(text);
 			mBuilder.setContentText(getString(R.string.notify_nolocation_body));
 			mBuilder.setStyle(null);
 			
