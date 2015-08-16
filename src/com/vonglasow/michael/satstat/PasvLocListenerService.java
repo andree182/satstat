@@ -108,14 +108,15 @@ public class PasvLocListenerService extends Service implements GpsStatus.Listene
 	@Override
 	public void onGpsStatusChanged(int event) {
 		GpsStatus status = mLocationManager.getGpsStatus(null);
-		int satsUsed = 0;
+		boolean satsUsed = false;
 		Iterable<GpsSatellite> sats = status.getSatellites();
 		for (GpsSatellite sat : sats) {
 			if (sat.usedInFix()) {
-				satsUsed++;
+				satsUsed = true;
+				break;
 			}
 		}
-		if (satsUsed == 0) {
+		if (!satsUsed) {
 			if (mStatus != GPS_INACTIVE)
 				mStatus = GPS_SEARCH;
 			showStatusNoLocation();
@@ -151,26 +152,26 @@ public class PasvLocListenerService extends Service implements GpsStatus.Listene
 					lat, getString(R.string.unit_degree), ns,
 					lon, getString(R.string.unit_degree), ew);
 			String text = "";
+
+			if (location.hasSpeed()) {
+				title = title + (" | ") + String.format("%.0f%s",
+						(location.getSpeed() * 3.6),
+						getString(R.string.unit_km_h));
+			}
+
 			if (location.hasAltitude()) {
 				text = text + String.format("%.0f%s",
 						location.getAltitude(),
 						getString(R.string.unit_meter));
-			}
-			if (location.hasSpeed()) {
-				text = text + (text.equals("")?"":", ") + String.format("%.0f%s",
-						(location.getSpeed() * 3.6),
-						getString(R.string.unit_km_h));
 			}
 			if (location.hasAccuracy()) {
 				text = text + (text.equals("")?"":", ") + String.format("\u03b5 = %.0f%s",
 						location.getAccuracy(),
 						getString(R.string.unit_meter));
 			}
-			text = text + (text.equals("")?"":", ") + String.format("%d/%d",
+			text = text + (text.equals("")?"":", ") + String.format("SAT %d/%d",
 					satsUsed,
 					satsInView);
-			text = text + (text.equals("")?"":",\n") + String.format("TTFF %d s",
-					status.getTimeToFirstFix() / 1000);
 			mBuilder.setSmallIcon(R.drawable.ic_stat_notify_location);
 			mBuilder.setContentTitle(title);
 			mBuilder.setContentText(text);
@@ -254,8 +255,25 @@ public class PasvLocListenerService extends Service implements GpsStatus.Listene
 
 	public void showStatusNoLocation() {
 		if (mNotifySearch && (mStatus != GPS_INACTIVE)) {
+			String text = "";
+			GpsStatus status = mLocationManager.getGpsStatus(null);
+			int satsInView = 0;
+			int satsUsed = 0;
+			Iterable<GpsSatellite> sats = status.getSatellites();
+			for (GpsSatellite sat : sats) {
+				satsInView++;
+				if (sat.usedInFix()) {
+					satsUsed++;
+				}
+			}
+
+			text = text + (text.equals("")?"":", ") + String.format("SAT h%d/%d",
+					satsUsed,
+					satsInView);
+			text = text + (text.equals("")?"":", ") + String.format("TTFF %d s",
+					status.getTimeToFirstFix() / 1000);
 			mBuilder.setSmallIcon(R.drawable.ic_stat_notify_nolocation);
-			mBuilder.setContentTitle(getString(R.string.notify_nolocation_title));
+			mBuilder.setContentTitle(text);
 			mBuilder.setContentText(getString(R.string.notify_nolocation_body));
 			mBuilder.setStyle(null);
 			
