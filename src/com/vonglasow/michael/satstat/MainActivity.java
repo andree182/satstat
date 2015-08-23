@@ -49,6 +49,8 @@ import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.hardware.GeomagneticField;
 import android.hardware.Sensor;
@@ -2103,14 +2105,17 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
             case 3:
                 fragment = new MapSectionFragment();
                 return fragment;
+			case 4:
+				fragment = new SunMapSectionFragment();
+				return fragment;
             }
         return null;
         }
 
         @Override
         public int getCount() {
-            // Show 4 total pages.
-            return 4;
+            // Show 5 total pages.
+            return 5;
         }
 
         public Drawable getPageIcon(int position) {
@@ -2123,6 +2128,8 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
                     return getResources().getDrawable(R.drawable.ic_action_radio);
                 case 3:
                     return getResources().getDrawable(R.drawable.ic_action_map);
+				case 4:
+					return getResources().getDrawable(R.drawable.ic_action_map); // TODO
             }
             return null;
         }
@@ -2139,6 +2146,8 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
                     return getString(R.string.title_section3).toUpperCase(l);
                 case 3:
                     return getString(R.string.title_section4).toUpperCase(l);
+				case 4:
+					return getString(R.string.title_section5).toUpperCase(l);
             }
             return null;
         }
@@ -2489,4 +2498,31 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
         	isMapViewReady = false;
         }
     }
+
+	/**
+	 * The fragment which displays GPS data.
+	 */
+	public static class SunMapSectionFragment extends Fragment {
+		/**
+		 * The fragment argument representing the section number for this
+		 * fragment.
+		 */
+		public static final String ARG_SECTION_NUMBER = "section_number";
+
+		public SunMapSectionFragment() {
+		}
+
+		@Override
+		public View onCreateView(LayoutInflater inflater, ViewGroup container,
+								 Bundle savedInstanceState) {
+			View rootView = inflater.inflate(R.layout.fragment_main_sun_map, container, false);
+
+			return rootView;
+		}
+
+		@Override
+		public void onDestroyView() {
+			super.onDestroyView();
+		}
+	}
 }
