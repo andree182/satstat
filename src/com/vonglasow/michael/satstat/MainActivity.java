@@ -2129,7 +2129,7 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
                 case 3:
                     return getResources().getDrawable(R.drawable.ic_action_map);
 				case 4:
-					return getResources().getDrawable(R.drawable.ic_action_map); // TODO
+					return getResources().getDrawable(R.drawable.ic_action_sun);
             }
             return null;
         }
