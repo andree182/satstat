@@ -33,6 +33,8 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
 import android.graphics.RectF;
 import android.location.GpsSatellite;
 import android.util.AttributeSet;
@@ -198,6 +200,90 @@ public class SunMapView extends ImageView {
             return theta0;
         }
 
+        /*  PROJILLUM  --  Project illuminated area on the map.  */
+        public static void projillum(int wtab[], int xdots, int ydots, double dec)
+        {
+            boolean ftf = true;
+            int i, ilon, ilat, lilon = 0, lilat = 0, xt;
+            double m, x, y, z, th, lon, lat, s, c;
+            final double TERMINC = 100; /* Circle segments for terminator */
+
+        	/* Clear unoccupied cells in width table */
+
+            for (i = 0; i < ydots; i++)
+                wtab[i] = -1;
+
+	        /* Build transformation for declination */
+
+            s = Math.sin(-Math.toRadians(dec));
+            c = Math.cos(-Math.toRadians(dec));
+
+	        /* Increment over a semicircle of illumination */
+
+            for (th = -(Math.PI / 2); th <= Math.PI / 2 + 0.001;
+                 th += Math.PI / TERMINC) {
+
+		        /* Transform the point through the declination rotation. */
+
+                x = -s * Math.sin(th);
+                y = Math.cos(th);
+                z = c * Math.sin(th);
+
+                /* Transform the resulting co-ordinate through the
+                   map projection to obtain screen co-ordinates. */
+
+                lon = (y == 0 && x == 0) ? 0.0 : Math.toDegrees(Math.atan2(y, x));
+                lat = Math.toDegrees(Math.asin(z));
+
+                ilat = (int)(ydots - (lat + 90) * (ydots / 180.0));
+                ilon = (int)(lon * (xdots / 360.0));
+
+                if (ftf) {
+        			/* First time.  Just save start co-ordinate. */
+
+                    lilon = ilon;
+                    lilat = ilat;
+                    ftf = false;
+                } else {
+	    		    /* Trace out the line and set the width table. */
+
+                    if (lilat == ilat) {
+                        wtab[(ydots - 1) - ilat] = ilon == 0 ? 1 : ilon;
+                    } else {
+                        m = ((double) (ilon - lilon)) / (ilat - lilat);
+                        for (i = lilat; i != ilat; i += Math.signum(ilat - lilat)) {
+                            xt = (int)(lilon + Math.floor((m * (i - lilat)) + 0.5));
+                            wtab[(ydots - 1) - i] = xt == 0 ? 1 : xt;
+                        }
+                    }
+                    lilon = ilon;
+                    lilat = ilat;
+                }
+            }
+
+            /* Now tweak the widths to generate full illumination for
+               the correct pole. */
+
+            if (dec < 0.0) {
+                ilat = ydots - 1;
+                lilat = -1;
+            } else {
+                ilat = 0;
+                lilat = 1;
+            }
+
+            for (i = ilat; i != ydots / 2; i += lilat) {
+                if (wtab[i] != -1) {
+                    while (true) {
+                        wtab[i] = xdots / 2;
+                        if (i == ilat)
+                            break;
+                        i -= lilat;
+                    }
+                    break;
+                }
+            }
+        }
     }
 
     public SunMapView(Context context) {
@@ -220,23 +306,54 @@ public class SunMapView extends ImageView {
             overlay = Bitmap.createBitmap(128, 64, Bitmap.Config.ARGB_8888);
         else
             overlay = Bitmap.createBitmap(this.getWidth(), this.getHeight(), Bitmap.Config.ARGB_8888);
-        Canvas c = new Canvas(overlay);
-        c.drawColor(Color.argb(128, 0, 0, 0));
 
         prepareMask();
     }
 
     private void prepareMask() {
-        Calendar c = Calendar.getInstance();
-        double jt = Astro.jtime(c);
+        Calendar cal = Calendar.getInstance();
+        double jt = Astro.jtime(cal);
         Astro.SunPos sp = Astro.sunpos(jt, false);
+        int width = overlay.getWidth();
+        int height = overlay.getHeight();
+        Canvas c = new Canvas(overlay);
+
+        int sec = cal.get(Calendar.HOUR_OF_DAY)*60*60 + cal.get(Calendar.MINUTE)*60 + cal.get(Calendar.SECOND);
+        int gmt_position = width * sec / 86400; // note: greenwich is in the middle!
+
+        int wtab[] = new int[overlay.getHeight()];
+
+        Astro.projillum(wtab, width, height, sp.dec);
+
+        overlay.eraseColor(Color.argb(255, 128, 128, 128));
+
+        Paint p = new Paint();
+        p.setColor(Color.argb(255, 255, 255, 255));
+
+        int start, stop;
+        int middle = width - gmt_position;
+        for (int y=0; y<height; y++) {
+            if (wtab[y] > 0) {
+                start = middle - wtab[y];
+                stop = middle + wtab[y];
+                if (start < 0) {
+                    c.drawLine(0, y, stop, y, p);
+                    c.drawLine(width + start, y, width, y, p);
+                } else if (stop > width) {
+                    c.drawLine(start, y, width, y, p);
+                    c.drawLine(0, y, stop - width, y, p);
+                } else
+                    c.drawLine(start, y, stop, y, p);
+            }
+        }
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-
-        canvas.drawBitmap(overlay, 0, 0, null);
+        Paint p = new Paint();
+        p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.MULTIPLY));
+        canvas.drawBitmap(overlay, 0, 0, p);
     }
 
     @Override
