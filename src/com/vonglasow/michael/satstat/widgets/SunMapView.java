@@ -389,6 +389,8 @@ public class SunMapView extends ImageView {
             canvas.drawLine(lx - overlay.getWidth() / 50, ly, lx + overlay.getWidth() / 50, ly, pPos);
             canvas.drawLine(lx, ly - overlay.getWidth() / 50, lx, ly + overlay.getWidth() / 50, pPos);
         }
+
+        // TODO: We could paint the satellites here
     }
 
     @Override
