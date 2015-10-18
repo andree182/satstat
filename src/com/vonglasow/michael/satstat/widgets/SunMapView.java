@@ -275,6 +275,35 @@ public class SunMapView extends ImageView {
                 }
             }
         }
+
+        /* get "daylength" at a location of latitude lat */
+        public static double daylength(SunPos sp, double lat)
+        {
+            double                  duration;
+            double                  sinsun, sinpos, sinapp, num;
+            final double SUN_APPRADIUS = 0.266; /* Sun apparent radius, in degrees */
+            final double ATM_REFRACTION = 0.100; /* Atmospheric refraction, in degrees */
+
+            sinpos = Math.sin(Math.toRadians(lat));
+
+            /* Get Sun declination */
+            sinsun = Math.sin(Math.toRadians(sp.dec));
+
+            /* Correct for the sun apparent diameter and atmospheric diffusion */
+            sinapp = Math.sin(Math.toRadians(SUN_APPRADIUS + ATM_REFRACTION));
+
+            num = 1 - sinsun*sinsun - sinpos*sinpos - sinapp*sinapp
+                    - 2*sinsun*sinpos*sinapp;
+            if (num<=0) {
+                if (sinsun*sinpos>0)
+                    duration = 24.0;
+                else
+                    duration = 0.0;
+            } else
+                duration = 12.0 + 24.0*Math.atan((sinsun * sinpos + sinapp) / Math.sqrt(num))/Math.PI;
+
+            return duration*3600;
+        }
     }
 
     private Astro.SunPos sp;
@@ -343,6 +372,25 @@ public class SunMapView extends ImageView {
             }
         }
 
+        double dl = Astro.daylength(sp, location.getLatitude());
+
+        if (gotLocation) {
+            /* Calculate solar time at the current location */
+            long stime = (long) ((location.getLongitude() - sp.slong) * 240.0);
+            Calendar stp = Calendar.getInstance();
+            stp.setTime(new Date(stime * 1000));
+            long diff = stp.get(Calendar.SECOND) - cal.get(Calendar.SECOND)
+                    + 60 * (stp.get(Calendar.MINUTE) - cal.get(Calendar.MINUTE))
+                    + 3600 * (stp.get(Calendar.HOUR_OF_DAY) - cal.get(Calendar.HOUR_OF_DAY));
+            if (location.getLongitude() > 0.0)
+                while (diff < -40000) diff += 86400;
+            if (location.getLongitude() < 0.0)
+                while (diff > 40000) diff -= 86400;
+            stime = cal.getTime().getTime() /1000 + diff;
+        }
+        sunrise.setHours(1);
+
+
         this.invalidate();
     }
 
@@ -350,6 +398,22 @@ public class SunMapView extends ImageView {
         gotLocation = true;
         location = l;
         updateData();
+    }
+
+    private Date sunrise, sunset;
+    private Date emptyDate = new Date();
+
+    public Date getSunrise() {
+        if (gotLocation)
+            return new Date();
+        else
+            return emptyDate;
+    }
+    public Date getSunset() {
+        if (gotLocation)
+            return new Date();
+        else
+            return emptyDate;
     }
 
     private float Lon360ToX(float l) {
