@@ -33,6 +33,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.Date;
 
 
 import android.annotation.SuppressLint;
@@ -147,6 +150,7 @@ import com.vonglasow.michael.satstat.data.CellTowerLte;
 import com.vonglasow.michael.satstat.mapsforge.PersistentTileCache;
 import com.vonglasow.michael.satstat.widgets.GpsSnrView;
 import com.vonglasow.michael.satstat.widgets.GpsStatusView;
+import com.vonglasow.michael.satstat.widgets.SunMapView;
 
 public class MainActivity extends FragmentActivity implements ActionBar.TabListener, GpsStatus.Listener, LocationListener, OnSharedPreferenceChangeListener, SensorEventListener, ViewPager.OnPageChangeListener {
 
@@ -343,7 +347,9 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
 	protected static ImageButton mapReattach;
 	protected static HashMap<String, Circle> mapCircles;
 	protected static HashMap<String, Marker> mapMarkers;
-	
+
+	protected static boolean isSunMapViewReady = false;
+	protected static SunMapSectionFragment sunMapFragment;
 	/**
 	 * Cached map of locations reported by the providers.
 	 * 
@@ -374,7 +380,7 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
 	protected static Handler wifiTimehandler = null;
 	protected static Runnable wifiTimeRunnable = null;
 	private static final int WIFI_REFRESH_DELAY = 1000; //the time between two requests for WLAN rescan.
-	
+
 	/**
 	 * Converts screen rotation to orientation for devices with a naturally tall screen.
 	 */
@@ -813,26 +819,19 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
      * Converts a bearing (in degrees) into a directional name.
      */
     public String formatOrientation(float bearing) {
-		return 
-			(bearing < 11.25) ? getString(R.string.value_N) :
-				(bearing < 33.75) ? getString(R.string.value_NNE) :
-					(bearing < 56.25) ? getString(R.string.value_NE) :
-						(bearing < 78.75) ? getString(R.string.value_ENE) :
-							(bearing < 101.25) ? getString(R.string.value_E) :
-								(bearing < 123.75) ? getString(R.string.value_ESE) :
-									(bearing < 146.25) ? getString(R.string.value_SE) :
-										(bearing < 168.75) ? getString(R.string.value_SSE) :
-											(bearing < 191.25) ? getString(R.string.value_S) :
-												(bearing < 213.75) ? getString(R.string.value_SSW) :
-													(bearing < 236.25) ? getString(R.string.value_SW) :
-														(bearing < 258.75) ? getString(R.string.value_WSW) :
-															(bearing < 280.25) ? getString(R.string.value_W) :
-																(bearing < 302.75) ? getString(R.string.value_WNW) :
-																	(bearing < 325.25) ? getString(R.string.value_NW) :
-																		(bearing < 347.75) ? getString(R.string.value_NNW) :
-																			getString(R.string.value_N);
-    }
-	
+		final String orients[] = {
+				"N", "NNE", "NE", "ENE",
+				"E", "ESE", "SE", "SSE",
+				"S", "SSW", "SW", "WSW",
+				"W", "WNW", "NW", "NNW"
+		};
+		final int nOrients = orients.length;
+
+		bearing += 360f / nOrients / 2;
+		if (bearing >= 360)
+			bearing = 0;
+		return orients[(int) (bearing / 360f * nOrients)];
+	}
     
     /**
      * Gets the WiFi channel number for a frequency
@@ -870,7 +869,7 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
 	
     /**
      * Gets the generation of a phone network type
-     * @param networkType The network type as returned by {@link TelephonyManager.getNetworkType}
+     * @param networkType The network type as returned by {@link TelephonyManager.getNetworkType()}
      * @return 2, 3 or 4 for 2G, 3G or 4G; 0 for unknown
      */
 	public static int getNetworkGeneration(int networkType) {
@@ -1041,17 +1040,9 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
     		// just enough space for drop-down list and menu
             actionBar.setDisplayShowHomeEnabled(false);
             actionBar.setDisplayShowTitleEnabled(false);
-    	} else if (dpX < 320) {
-    		// not enough space for four tabs, but home will fit next to list
-            actionBar.setDisplayShowHomeEnabled(true);
-            actionBar.setDisplayShowTitleEnabled(false);
-    	} else if (dpX < 384) {
-    		// just enough space for four tabs
-            actionBar.setDisplayShowHomeEnabled(false);
-            actionBar.setDisplayShowTitleEnabled(false);
     	} else if ((dpX < 448) || ((config.orientation == Configuration.ORIENTATION_PORTRAIT) && (dpX < 544))) {
     		// space for four tabs and home, but not title
-            actionBar.setDisplayShowHomeEnabled(true);
+            actionBar.setDisplayShowHomeEnabled(false);
             actionBar.setDisplayShowTitleEnabled(false);
     	} else {
     		// ample space for home, title and all four tabs
@@ -1081,11 +1072,11 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
         
         // Add tabs, specifying the tab's text and TabListener
         for (int i = 0; i < mSectionsPagerAdapter.getCount(); i++) {
-            actionBar.addTab(
-                    actionBar.newTab()
-                            //.setText(mSectionsPagerAdapter.getPageTitle(i))
-                            .setIcon(mSectionsPagerAdapter.getPageIcon(i))
-                            .setTabListener(this));
+			actionBar.addTab(
+					actionBar.newTab()
+							//.setText(mSectionsPagerAdapter.getPageTitle(i))
+							.setIcon(mSectionsPagerAdapter.getPageIcon(i))
+							.setTabListener(this));
         }
         
         // This is needed by the mapsforge library.
@@ -1140,8 +1131,6 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
         
         updateLocationProviderStyles();
     }
-	
-	
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -1240,7 +1229,7 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
 			if ((circle != null) || (marker != null) || (invalidator != null))
 				updateMap();
 		}
-    	
+
     	// update GPS view
     	if ((location.getProvider().equals(LocationManager.GPS_PROVIDER)) && (isGpsViewReady)) {
 	    	if (location.hasAccuracy()) {
@@ -1265,7 +1254,7 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
 	    		gpsAlt.setText(getString(R.string.value_none));
 	    		orDeclination.setText(getString(R.string.value_none));
 	    	}
-	    	
+
 	    	if (location.hasBearing()) {
 	    		gpsBearing.setText(String.format("%.0f%s", location.getBearing(), getString(R.string.unit_degree)));
 	    		gpsOrientation.setText(formatOrientation(location.getBearing()));
@@ -1283,6 +1272,10 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
 	    	// note: getting number of sats in fix by looking for "satellites"
 	    	// in location's extras doesn't seem to work, always returns 0 sats
     	}
+
+		if (isSunMapViewReady) {
+			sunMapFragment.onLocationChanged(location);
+		}
     }
     
     /**
@@ -1917,10 +1910,10 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
 	        	Resources res = context.getResources();
 	        	TypedArray style = res.obtainTypedArray(res.getIdentifier(styleName, "array", context.getPackageName()));
 	        	Paint fill = AndroidGraphicFactory.INSTANCE.createPaint();
-	        	fill.setColor(style.getColor(STYLE_FILL, R.color.circle_gray_fill));
+	        	fill.setColor(style.getColor(STYLE_FILL, res.getColor(R.color.circle_gray_fill)));
 	            fill.setStyle(Style.FILL);
 	            Paint stroke = AndroidGraphicFactory.INSTANCE.createPaint();
-	        	stroke.setColor(style.getColor(STYLE_STROKE, R.color.circle_gray_stroke));
+	        	stroke.setColor(style.getColor(STYLE_STROKE, res.getColor(R.color.circle_gray_stroke)));
 	            stroke.setStrokeWidth(4); // FIXME: make this DPI-dependent
 	            stroke.setStyle(Style.STROKE);
 	            Circle circle = new Circle(latLong, acc, fill, stroke);
@@ -2103,13 +2096,13 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
                 fragment = new RadioSectionFragment();
                 return fragment;
             case 3:
-                fragment = new MapSectionFragment();
-                return fragment;
-			case 4:
 				fragment = new SunMapSectionFragment();
 				return fragment;
+			case 4:
+				fragment = new MapSectionFragment();
+				return fragment;
             }
-        return null;
+			return null;
         }
 
         @Override
@@ -2126,10 +2119,10 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
                     return getResources().getDrawable(R.drawable.ic_action_sensor);
                 case 2:
                     return getResources().getDrawable(R.drawable.ic_action_radio);
-                case 3:
-                    return getResources().getDrawable(R.drawable.ic_action_map);
-				case 4:
+				case 3:
 					return getResources().getDrawable(R.drawable.ic_action_sun);
+                case 4:
+                    return getResources().getDrawable(R.drawable.ic_action_map);
             }
             return null;
         }
@@ -2144,10 +2137,10 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
                     return getString(R.string.title_section2).toUpperCase(l);
                 case 2:
                     return getString(R.string.title_section3).toUpperCase(l);
-                case 3:
-                    return getString(R.string.title_section4).toUpperCase(l);
-				case 4:
+				case 3:
 					return getString(R.string.title_section5).toUpperCase(l);
+                case 4:
+                    return getString(R.string.title_section4).toUpperCase(l);
             }
             return null;
         }
@@ -2190,7 +2183,7 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
         	gpsOrientation = (TextView) rootView.findViewById(R.id.gpsOrientation);
         	gpsSats = (TextView) rootView.findViewById(R.id.gpsSats);
         	gpsTtff = (TextView) rootView.findViewById(R.id.gpsTtff);
-        	
+
         	isGpsViewReady = true;
         	
             return rootView;
@@ -2503,6 +2496,13 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
 	 * The fragment which displays GPS data.
 	 */
 	public static class SunMapSectionFragment extends Fragment {
+		protected static SunMapView sunMapView;
+		protected static TextView sunrise;
+		protected static TextView sunset;
+		protected static Timer sunMapTimer;
+		protected static Handler sunMapHandler;
+		protected static Runnable sunMapRunnable;
+
 		/**
 		 * The fragment argument representing the section number for this
 		 * fragment.
@@ -2512,16 +2512,50 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
 		public SunMapSectionFragment() {
 		}
 
+		public void updateView() {
+			sunMapView.updateData();
+			Date srise = sunMapView.getSunrise();
+			Date sset = sunMapView.getSunset();
+			sunrise.setText(String.format("%02d:%02d", srise.getHours(), srise.getMinutes()));
+			sunset.setText(String.format("%02d:%02d", sset.getHours(), sset.getMinutes()));
+		}
+		public void onLocationChanged(Location l) {
+			sunMapView.setLocation(l);
+			updateView();
+		}
+
 		@Override
 		public View onCreateView(LayoutInflater inflater, ViewGroup container,
 								 Bundle savedInstanceState) {
 			View rootView = inflater.inflate(R.layout.fragment_main_sun_map, container, false);
 
+			sunMapView = (SunMapView) rootView.findViewById(R.id.imageView);
+			sunrise = (TextView) rootView.findViewById(R.id.sunrise);
+			sunset = (TextView) rootView.findViewById(R.id.sunset);
+
+			/* We need to update this regularly even if location doesn't change. If the user is not
+			 * sitting in ISS, once a minute should be enough(tm). */
+			sunMapTimer = new Timer();
+			sunMapHandler = new Handler();
+			sunMapRunnable = new Runnable() {
+				@Override
+				public void run() {
+					updateView();
+				}
+			};
+			sunMapTimer.schedule(new TimerTask() {
+				@Override
+				public void run() { sunMapHandler.post(sunMapRunnable); }
+			}, 0, 60000);
+
+			sunMapFragment = this;
+			isSunMapViewReady = true;
 			return rootView;
 		}
 
 		@Override
 		public void onDestroyView() {
+			isSunMapViewReady = false;
 			super.onDestroyView();
 		}
 	}

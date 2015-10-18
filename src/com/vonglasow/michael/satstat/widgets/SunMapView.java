@@ -1,5 +1,8 @@
 /*
- * Copyright © 2013 Michael von Glasow.
+ * Sunclock code by John Mackin.
+ * kdewatch code by Stephan Kulow <coolo@kde.org>
+ *
+ * Copyright © 2015 Andrej Krutak.
  * 
  * This file is part of LSRN Tools.
  *
@@ -19,24 +22,18 @@
 
 package com.vonglasow.michael.satstat.widgets;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Date;
 import java.util.Calendar;
+import java.util.Date;
+import java.util.TimeZone;
 
-import com.vonglasow.michael.satstat.R;
-
-import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
-import android.graphics.RectF;
-import android.location.GpsSatellite;
+import android.location.Location;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.widget.ImageView;
@@ -106,10 +103,7 @@ public class SunMapView extends ImageView {
 		(corrected  for  nutation  and aberration) is desired.
                 The Sun's co-ordinates are returned  in  RA  and  DEC,
 		both  specified  in degrees (divide RA by 15 to obtain
-		hours).  The radius vector to the Sun in  astronomical
-                units  is returned in RV and the Sun's longitude (true
-		or apparent, as desired) is  returned  as  degrees  in
-		SLONG.	*/
+		hours). Also suns longitude is returned. */
         public static SunPos sunpos(double jd, boolean apparent)
         {
             double t, t2, t3, l, m, e, ea, v, theta, omega,
@@ -160,9 +154,8 @@ public class SunMapView extends ImageView {
                 eps += 0.00256 * Math.cos(Math.toRadians(omega));
             }
 
-            /* Return Sun's longitude and radius vector */
+            /* Return Sun's radius vector */
 
-            r.slong = theta;
             r.rv = (1.0000002 * (1 - e * e)) / (1 + e * Math.cos(Math.toRadians(v)));
 
 	        /* Determine solar co-ordinates. */
@@ -174,6 +167,10 @@ public class SunMapView extends ImageView {
                 ))
             );
             r.dec = Math.toDegrees(Math.asin(Math.sin(Math.toRadians(eps)) * Math.sin(Math.toRadians(theta))));
+
+            double gt;
+            gt = gmst(jd);
+            r.slong = fixangle(180.0 + (r.ra - (gt * 15)));
 
             return r;
         }
@@ -285,6 +282,9 @@ public class SunMapView extends ImageView {
             }
         }
     }
+    private Astro.SunPos sp;
+    private boolean gotLocation;
+    private Location location;
 
     public SunMapView(Context context) {
         super(context);
@@ -307,13 +307,14 @@ public class SunMapView extends ImageView {
         else
             overlay = Bitmap.createBitmap(this.getWidth(), this.getHeight(), Bitmap.Config.ARGB_8888);
 
-        prepareMask();
+        gotLocation = false;
+        updateData();
     }
 
-    private void prepareMask() {
-        Calendar cal = Calendar.getInstance();
+    public void updateData() {
+        Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
         double jt = Astro.jtime(cal);
-        Astro.SunPos sp = Astro.sunpos(jt, false);
+        sp = Astro.sunpos(jt, false);
         int width = overlay.getWidth();
         int height = overlay.getHeight();
         Canvas c = new Canvas(overlay);
@@ -346,14 +347,61 @@ public class SunMapView extends ImageView {
                     c.drawLine(start, y, stop, y, p);
             }
         }
+
+        this.invalidate();
+    }
+
+    public void setLocation(Location l) {
+        gotLocation = true;
+        location = l;
+        updateData();
+    }
+
+    public Date getSunrise() {
+        return new Date();
+    }
+    public Date getSunset() {
+        return new Date();
+    }
+
+
+    private float Lon360ToX(float l) {
+        return l * overlay.getWidth() / 360;
+    }
+    private float Lat180ToY(float l) {
+        return (180 - l) * overlay.getHeight() / 180;
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+
         Paint p = new Paint();
         p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.MULTIPLY));
         canvas.drawBitmap(overlay, 0, 0, p);
+
+        /* Sun position */
+        Paint pSun = new Paint();
+        pSun.setColor(Color.YELLOW);
+        pSun.setAntiAlias(true);
+        pSun.setAlpha(128);
+        canvas.drawCircle(
+                Lon360ToX((float) sp.slong), Lat180ToY((float) (90 + sp.dec)),
+                overlay.getHeight() / 35,
+                pSun
+        );
+
+        if (gotLocation) {
+            /* Our position */
+            Paint pPos = new Paint();
+            pPos.setColor(Color.RED);
+            pPos.setAntiAlias(true);
+            pPos.setAlpha(200);
+            float lx = Lon360ToX(180 + (float) location.getLongitude());
+            float ly = Lat180ToY(90 + (float) location.getLatitude());
+            canvas.drawLine(lx - overlay.getWidth() / 50, ly, lx + overlay.getWidth() / 50, ly, pPos);
+            canvas.drawLine(lx, ly - overlay.getWidth() / 50, lx, ly + overlay.getWidth() / 50, pPos);
+        }
     }
 
     @Override
