@@ -21,8 +21,8 @@
     <string name="title_section1">GPS</string>
     <string name="title_section2">Sensors</string>
     <string name="title_section3">Radio</string>
-    <string name="title_section4">Map</string>
-    <string name="title_section5">Sun Map</string>
+    <string name="title_section4">Sun Map</string>
+    <string name="title_section5">Map</string>
     <string name="title_gps_lat">Latitude</string>
     <string name="title_gps_lon">Longitude</string>
     <string name="title_gps_decl">Decl.</string>

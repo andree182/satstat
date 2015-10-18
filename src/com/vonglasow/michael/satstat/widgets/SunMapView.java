@@ -381,13 +381,16 @@ public class SunMapView extends ImageView {
         if (gotLocation) {
             /* Our position */
             Paint pPos = new Paint();
+            long crossSize = overlay.getWidth() / 50;
             pPos.setColor(Color.RED);
             pPos.setAntiAlias(true);
             pPos.setAlpha(200);
+            pPos.setStyle(Paint.Style.STROKE);
             float lx = Lon360ToX(180 + (float) location.getLongitude());
             float ly = Lat180ToY(90 + (float) location.getLatitude());
-            canvas.drawLine(lx - overlay.getWidth() / 50, ly, lx + overlay.getWidth() / 50, ly, pPos);
-            canvas.drawLine(lx, ly - overlay.getWidth() / 50, lx, ly + overlay.getWidth() / 50, pPos);
+            canvas.drawLine(lx - crossSize, ly, lx + crossSize, ly, pPos);
+            canvas.drawLine(lx, ly - crossSize, lx, ly + crossSize, pPos);
+            canvas.drawCircle(lx, ly, crossSize, pPos);
         }
 
         // TODO: We could paint the satellites here

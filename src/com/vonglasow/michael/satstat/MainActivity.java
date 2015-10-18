@@ -2138,9 +2138,9 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
                 case 2:
                     return getString(R.string.title_section3).toUpperCase(l);
 				case 3:
-					return getString(R.string.title_section5).toUpperCase(l);
+					return getString(R.string.title_section4).toUpperCase(l);
                 case 4:
-                    return getString(R.string.title_section4).toUpperCase(l);
+                    return getString(R.string.title_section5).toUpperCase(l);
             }
             return null;
         }
