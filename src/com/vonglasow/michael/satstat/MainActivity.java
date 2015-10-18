@@ -2497,8 +2497,6 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
 	 */
 	public static class SunMapSectionFragment extends Fragment {
 		protected static SunMapView sunMapView;
-		protected static TextView sunrise;
-		protected static TextView sunset;
 		protected static Timer sunMapTimer;
 		protected static Handler sunMapHandler;
 		protected static Runnable sunMapRunnable;
@@ -2514,10 +2512,6 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
 
 		public void updateView() {
 			sunMapView.updateData();
-			Date srise = sunMapView.getSunrise();
-			Date sset = sunMapView.getSunset();
-			sunrise.setText(String.format("%02d:%02d", srise.getHours(), srise.getMinutes()));
-			sunset.setText(String.format("%02d:%02d", sset.getHours(), sset.getMinutes()));
 		}
 		public void onLocationChanged(Location l) {
 			sunMapView.setLocation(l);
@@ -2530,8 +2524,6 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
 			View rootView = inflater.inflate(R.layout.fragment_main_sun_map, container, false);
 
 			sunMapView = (SunMapView) rootView.findViewById(R.id.imageView);
-			sunrise = (TextView) rootView.findViewById(R.id.sunrise);
-			sunset = (TextView) rootView.findViewById(R.id.sunset);
 
 			/* We need to update this regularly even if location doesn't change. If the user is not
 			 * sitting in ISS, once a minute should be enough(tm). */

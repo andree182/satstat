@@ -206,29 +206,24 @@ public class SunMapView extends ImageView {
             final double TERMINC = 100; /* Circle segments for terminator */
 
         	/* Clear unoccupied cells in width table */
-
             for (i = 0; i < ydots; i++)
                 wtab[i] = -1;
 
 	        /* Build transformation for declination */
-
             s = Math.sin(-Math.toRadians(dec));
             c = Math.cos(-Math.toRadians(dec));
 
 	        /* Increment over a semicircle of illumination */
-
             for (th = -(Math.PI / 2); th <= Math.PI / 2 + 0.001;
                  th += Math.PI / TERMINC) {
 
 		        /* Transform the point through the declination rotation. */
-
                 x = -s * Math.sin(th);
                 y = Math.cos(th);
                 z = c * Math.sin(th);
 
                 /* Transform the resulting co-ordinate through the
                    map projection to obtain screen co-ordinates. */
-
                 lon = (y == 0 && x == 0) ? 0.0 : Math.toDegrees(Math.atan2(y, x));
                 lat = Math.toDegrees(Math.asin(z));
 
@@ -260,7 +255,6 @@ public class SunMapView extends ImageView {
 
             /* Now tweak the widths to generate full illumination for
                the correct pole. */
-
             if (dec < 0.0) {
                 ilat = ydots - 1;
                 lilat = -1;
@@ -282,6 +276,7 @@ public class SunMapView extends ImageView {
             }
         }
     }
+
     private Astro.SunPos sp;
     private boolean gotLocation;
     private Location location;
@@ -356,14 +351,6 @@ public class SunMapView extends ImageView {
         location = l;
         updateData();
     }
-
-    public Date getSunrise() {
-        return new Date();
-    }
-    public Date getSunset() {
-        return new Date();
-    }
-
 
     private float Lon360ToX(float l) {
         return l * overlay.getWidth() / 360;
