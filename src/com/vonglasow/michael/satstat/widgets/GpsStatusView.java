@@ -44,7 +44,7 @@ public class GpsStatusView extends SquareView {
 	private Paint gridPaint;
 	private Paint gridBorderPaint;
 	private Paint labelPaint;
-	private Paint centeringPaint;
+	private Paint levellingPaint;
 	private Path northArrow = new Path();
 	private Path labelPathN = new Path();
 	private Path labelPathE = new Path();
@@ -98,9 +98,9 @@ public class GpsStatusView extends SquareView {
 		gridBorderPaint.setColor(Color.parseColor("#50FF9800")); // Orange 500 @ 30%
 		gridBorderPaint.setStyle(Paint.Style.STROKE);
 
-		centeringPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-		centeringPaint.setColor(Color.parseColor("#30FFFFFF"));
-		centeringPaint.setStyle(Paint.Style.FILL);
+		levellingPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+		levellingPaint.setColor(Color.parseColor("#FFFFFF"));
+		levellingPaint.setStyle(Paint.Style.FILL);
 
 		northPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 		northPaint.setColor(Color.parseColor("#FFF44336")); // Red 500
@@ -126,26 +126,58 @@ public class GpsStatusView extends SquareView {
 	
 	@Override
 	protected void onDraw(Canvas canvas) {
+		final float outerSize = 0.405f;
 		int cx = mW / 2;
 		int cy = mH / 2;
-		float roll = mRoll, pitch = mPitch;
+		float levelX = mRoll / 90, levelY = mPitch / 90;
+		float levelDistance, levelAngle;
 
 		//Log.d("GpsStatusView", String.format("Drawing on a %dx%d canvas", w, h));
 
 		canvas.translate(cx, cy);
 
-		canvas.drawCircle(mRoll / 90 * mW, mPitch / 180 * mW, mW * 0.05f, centeringPaint);
+		// Draw levelling circle in the background
+		if (levelY > 1)
+			levelY = 2 - levelY;
+		if (levelY < -1)
+			levelY = -2 - levelY;
+		levelDistance = (float) Math.min(Math.sqrt(levelX * levelX + levelY * levelY), 1);
+		if (levelX == 0) {
+			// Quite improbable, but...
+			if (levelY > 0)
+				levelAngle = (float)Math.PI / 2f;
+			else
+				levelAngle = (float)Math.PI * 3f / 2f;
+		} else {
+			levelAngle = (float) Math.atan(levelY / levelX);
+			if (levelX < 0)
+				levelAngle += Math.PI;
+			else if (levelY < 0)
+				levelAngle += Math.PI * 2;
+		}
 
+		levellingPaint.setAlpha(
+			(int)(16.0f + 80.0f * Math.pow(
+				Math.max(1 - levelDistance, 1 - Math.min(Math.abs(levelY), Math.abs(levelX))), 3)
+			)
+		);
+		canvas.drawCircle(
+			levelDistance * (float)Math.cos(levelAngle) * mW * outerSize / 6f * 5f,
+			levelDistance * (float)Math.sin(levelAngle) * mW * outerSize / 6f * 5f,
+			mW * outerSize / 3f * (0.5f + (1 - levelDistance) * 0.5f), levellingPaint
+		);
+
+		// Draw the rest of the compass...
 		canvas.rotate(-mRotation);
 
-		canvas.drawCircle(0, 0, mW * 0.37125f, gridBorderPaint);
+		canvas.drawCircle(0, 0, mW * outerSize / 1.091f, gridBorderPaint);
 
-		canvas.drawLine(-mW * 0.405f, 0, mW * 0.405f, 0, gridPaint);
-		canvas.drawLine(0, -mH * 0.405f, 0, mH * 0.405f, gridPaint);
+		canvas.drawLine(-mW * outerSize, 0, mW * outerSize, 0, gridPaint);
+		canvas.drawLine(0, -mH * outerSize, 0, mH * outerSize, gridPaint);
 
-		canvas.drawCircle(0,  0,  mW * 0.405f, gridPaint);
-		canvas.drawCircle(0,  0,  mW * 0.27f, gridPaint);
-		canvas.drawCircle(0,  0,  mW * 0.135f, gridPaint);
+		canvas.drawCircle(0,  0,  mW * outerSize, gridPaint);
+		canvas.drawCircle(0,  0,  mW * outerSize / 1.5f, gridPaint);
+		canvas.drawCircle(0,  0,  mW * outerSize / 3f, gridPaint);
 		
 		canvas.drawPath(northArrow, northPaint);
 		
