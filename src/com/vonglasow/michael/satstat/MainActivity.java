@@ -239,24 +239,18 @@ public class MainActivity extends AppCompatActivity implements GpsStatus.Listene
      * Converts a bearing (in degrees) into a directional name.
      */
     public static String formatOrientation(Context context, float bearing) {
-		return 
-			(bearing < 11.25) ? context.getString(R.string.value_N) :
-				(bearing < 33.75) ? context.getString(R.string.value_NNE) :
-					(bearing < 56.25) ? context.getString(R.string.value_NE) :
-						(bearing < 78.75) ? context.getString(R.string.value_ENE) :
-							(bearing < 101.25) ? context.getString(R.string.value_E) :
-								(bearing < 123.75) ? context.getString(R.string.value_ESE) :
-									(bearing < 146.25) ? context.getString(R.string.value_SE) :
-										(bearing < 168.75) ? context.getString(R.string.value_SSE) :
-											(bearing < 191.25) ? context.getString(R.string.value_S) :
-												(bearing < 213.75) ? context.getString(R.string.value_SSW) :
-													(bearing < 236.25) ? context.getString(R.string.value_SW) :
-														(bearing < 258.75) ? context.getString(R.string.value_WSW) :
-															(bearing < 280.25) ? context.getString(R.string.value_W) :
-																(bearing < 302.75) ? context.getString(R.string.value_WNW) :
-																	(bearing < 325.25) ? context.getString(R.string.value_NW) :
-																		(bearing < 347.75) ? context.getString(R.string.value_NNW) :
-																			context.getString(R.string.value_N);
+		final int orients[] = {
+				R.string.value_N, R.string.value_NNE, R.string.value_NE, R.string.value_ENE,
+				R.string.value_E, R.string.value_ESE, R.string.value_SE, R.string.value_SSE,
+				R.string.value_S, R.string.value_SSW, R.string.value_SW, R.string.value_WSW,
+				R.string.value_W, R.string.value_WNW, R.string.value_NW, R.string.value_NNW
+		};
+		final int nOrients = orients.length;
+
+		bearing += 360f / nOrients / 2;
+		if (bearing >= 360)
+			bearing = 0;
+		return context.getString(orients[(int) (bearing / 360f * nOrients)]);
     }
 	
     
